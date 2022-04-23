@@ -1,0 +1,4 @@
+ 
+# bqslots module
+
+::: bqslots.bqslots
