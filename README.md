@@ -17,7 +17,7 @@
 
 ## Features
 
--   TODO
+-   Basic client to allocate slots to GCP project
 
 ## Credits
 
