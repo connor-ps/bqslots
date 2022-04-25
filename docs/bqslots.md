@@ -1,4 +1,4 @@
  
 # bqslots module
 
-::: bqslots.bqslots
+::: bqslots.slots_allocation.Client

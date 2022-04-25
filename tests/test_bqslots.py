@@ -3,7 +3,7 @@
 """Tests for `bqslots` package."""
 
 import unittest
-import bqslots.client as bqs
+import bqslots.slots_allocation as bqs
 import pathlib
 import json
 import shutil
