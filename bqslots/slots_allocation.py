@@ -4,7 +4,7 @@ import json
 from google.api_core import retry
 from google.cloud import bigquery_reservation_v1
 from google.protobuf import field_mask_pb2
-from gcs_lock_thing import lock
+import lock
 
 
 def box_print(msg, indent=1, width=None, title=None):
