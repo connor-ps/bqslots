@@ -1,1 +1,2 @@
 google-cloud-bigquery-reservation==1.6.0
+gcs_lock_thing=0.0.4

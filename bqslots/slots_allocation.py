@@ -4,6 +4,7 @@ import json
 from google.api_core import retry
 from google.cloud import bigquery_reservation_v1
 from google.protobuf import field_mask_pb2
+from gcs_lock_thing import lock
 
 
 def box_print(msg, indent=1, width=None, title=None):
@@ -28,8 +29,6 @@ def box_print(msg, indent=1, width=None, title=None):
     print(box)
 
 
-
-
 class Client:
     """
     wrapper for reservation client, each client is for one project and reservation
@@ -41,15 +40,16 @@ class Client:
     """
 
     MAX_SLOTS_MESSAGE = "SLOTS_QUOTA_REACHED"
-    standard_retry = retry.Retry(deadline=120, predicate=Exception, maximum=2)
+    standard_retry = retry.Retry(deadline=120, predicate=Exception)
 
     def __init__(
-        self,
-        admin_project: str,
-        admin_region: str,
-        reservation: str,
-        max_slots_quota: int,
-        user_project: str,
+            self,
+            admin_project: str,
+            admin_region: str,
+            reservation: str,
+            max_slots_quota: int,
+            user_project: str,
+            gcs_lock_bucket=None
     ):
         self.admin_project = admin_project
         self.admin_region = admin_region
@@ -66,6 +66,11 @@ class Client:
         )
         self.reservation_api = bigquery_reservation_v1.ReservationServiceClient()
         self.last_slot_commit = None
+
+        self.using_lock = False
+        if gcs_lock_bucket:
+            self.lock_client = lock.Client(bucket=gcs_lock_bucket, lock_file_path="slots-lock.txt", ttl=2)
+            self.using_lock = True
 
     def allocate_slots(self, slots: int) -> str:
         """
@@ -96,6 +101,10 @@ class Client:
             print(self.MAX_SLOTS_MESSAGE)
             return
 
+        # do stuff
+        if self.using_lock:
+            self.lock_client.lock()
+
         commit = self.reservation_api.get_capacity_commitment(
             name=commitment_id,
             retry=self.standard_retry,
@@ -111,14 +120,15 @@ class Client:
 
         self._clear_slots(commitment_id)
 
+        if self.using_lock:
+            self.lock_client.free_lock()
+
         msg = f"""
                 commitment: {commitment_id} -> DELETED
                 reservation_amount left: {reservation_amount}
                 total_slots_used on admin project: {total_slots_used}
               """
         box_print(msg=msg, indent=20)
-
-
 
     @staticmethod
     def write_dict_to_json_file(path: str, filename: str, data: Dict):
@@ -158,8 +168,8 @@ class Client:
         """
 
         if (
-            slots + self._get_total_number_of_slots_allocated_admin_project()
-            > self.max_slots_quota
+                slots + self._get_total_number_of_slots_allocated_admin_project()
+                > self.max_slots_quota
         ):
             return self.MAX_SLOTS_MESSAGE
 
@@ -271,8 +281,8 @@ class Client:
                 [
                     i.name
                     for i in self.reservation_api.list_assignments(
-                        parent=self.admin_project_region_path + "/reservations/" + i
-                    )
+                    parent=self.admin_project_region_path + "/reservations/" + i
+                )
                 ]
             )
         return assignments
