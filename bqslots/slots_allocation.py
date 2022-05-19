@@ -15,17 +15,19 @@ def box_print(msg, indent=1, width=None, title=None):
     :param title:
     :return:
     """
-    lines = msg.split('\n')
+    lines = msg.split("\n")
     space = " " * indent
     if not width:
         width = max(map(len, lines))
     box = f'╔{"═" * (width + indent * 2)}╗\n'  # upper_border
     if title:
-        box += f'║{space}{title:<{width}}{space}║\n'  # title
+        box += f"║{space}{title:<{width}}{space}║\n"  # title
         box += f'║{space}{"-" * len(title):<{width}}{space}║\n'  # underscore
-    box += ''.join([f'║{space}{line:<{width}}{space}║\n' for line in lines])
+    box += "".join([f"║{space}{line:<{width}}{space}║\n" for line in lines])
     box += f'╚{"═" * (width + indent * 2)}╝'  # lower_border
     print(box)
+
+
 
 
 class Client:
@@ -37,21 +39,31 @@ class Client:
 
 
     """
-    MAX_SLOTS_MESSAGE = "SLOTS_QUOTA_REACHED"
 
-    def __init__(self,
-                 admin_project: str,
-                 admin_region: str,
-                 reservation: str,
-                 max_slots_quota: int,
-                 user_project: str):
+    MAX_SLOTS_MESSAGE = "SLOTS_QUOTA_REACHED"
+    standard_retry = retry.Retry(deadline=120, predicate=Exception, maximum=2)
+
+    def __init__(
+        self,
+        admin_project: str,
+        admin_region: str,
+        reservation: str,
+        max_slots_quota: int,
+        user_project: str,
+    ):
         self.admin_project = admin_project
         self.admin_region = admin_region
-        self.reservation = reservation.lower()  # i.e "default" needs to be lowercase api calls
+        self.reservation = (
+            reservation.lower()
+        )  # i.e "default" needs to be lowercase api calls
         self.max_slots_quota = max_slots_quota
         self.user_project = user_project
-        self.admin_project_region_path = f"projects/{admin_project}/locations/{admin_region}"
-        self.reservation_path = f"{self.admin_project_region_path}/reservations/{reservation}"
+        self.admin_project_region_path = (
+            f"projects/{admin_project}/locations/{admin_region}"
+        )
+        self.reservation_path = (
+            f"{self.admin_project_region_path}/reservations/{reservation}"
+        )
         self.reservation_api = bigquery_reservation_v1.ReservationServiceClient()
         self.last_slot_commit = None
 
@@ -84,7 +96,10 @@ class Client:
             print(self.MAX_SLOTS_MESSAGE)
             return
 
-        commit = self.reservation_api.get_capacity_commitment(name=commitment_id)
+        commit = self.reservation_api.get_capacity_commitment(
+            name=commitment_id,
+            retry=self.standard_retry,
+        )
         commit_slots = commit.slot_count
         self._decrement_slots_number_on_reservation(commit_slots)
 
@@ -103,8 +118,10 @@ class Client:
               """
         box_print(msg=msg, indent=20)
 
+
+
     @staticmethod
-    def write_dict_to_json_file(path: str, filename: str, data:Dict):
+    def write_dict_to_json_file(path: str, filename: str, data: Dict):
         """
         :param path:
         :param filename:
@@ -113,7 +130,7 @@ class Client:
         """
         p = Path(path)
         p.mkdir(exist_ok=True, parents=True)
-        (p / filename).open('w').write(json.dumps(data))
+        (p / filename).open("w").write(json.dumps(data))
 
     def _decrement_slots_number_on_reservation(self, slots: int):
         """
@@ -140,13 +157,18 @@ class Client:
         :return: the commit name
         """
 
-        if slots + self._get_total_number_of_slots_allocated_admin_project() > self.max_slots_quota:
+        if (
+            slots + self._get_total_number_of_slots_allocated_admin_project()
+            > self.max_slots_quota
+        ):
             return self.MAX_SLOTS_MESSAGE
 
-        commit_config = bigquery_reservation_v1.CapacityCommitment(plan="FLEX", slot_count=slots)
+        commit_config = bigquery_reservation_v1.CapacityCommitment(
+            plan="FLEX", slot_count=slots,
+        )
 
         commit = self.reservation_api.create_capacity_commitment(
-            parent=self.admin_project_region_path, capacity_commitment=commit_config
+            parent=self.admin_project_region_path, capacity_commitment=commit_config, retry=self.standard_retry
         )
         self.last_slot_commit = commit.name
         box_print(f"purchased commit:{commit.name}")
@@ -159,7 +181,10 @@ class Client:
         :return:
         """
         list_slot_counts = [
-            i.slot_count for i in self.reservation_api.list_capacity_commitments(parent=self.admin_project_region_path)
+            i.slot_count
+            for i in self.reservation_api.list_capacity_commitments(
+                parent=self.admin_project_region_path, retry=self.standard_retry
+            )
         ]
 
         return sum(list_slot_counts)
@@ -169,7 +194,10 @@ class Client:
 
         :return:
         """
-        res = self.reservation_api.get_reservation(name=self.reservation_path)
+        res = self.reservation_api.get_reservation(
+            name=self.reservation_path,
+            retry=self.standard_retry,
+        )
         return res.slot_capacity
 
     def _create_assignment(self):
@@ -184,12 +212,15 @@ class Client:
         )
 
         try:
-            assign = self.reservation_api.create_assignment(parent=self.reservation_path, assignment=assign_config)
+            assign = self.reservation_api.create_assignment(
+                parent=self.reservation_path,
+                assignment=assign_config,
+                retry=self.standard_retry,
+            )
             return assign.name
 
         except Exception as e:
-            # we cant print anything because we are using that for xcomm
-            dummy_var = e
+            print(e)
 
     def _change_reservation_slots_amount(self, amount=100):
         """
@@ -197,7 +228,7 @@ class Client:
         :return:
         """
 
-        res = self.reservation_api.get_reservation(name=self.reservation_path)
+        res = self.reservation_api.get_reservation(name=self.reservation_path, retry=retry.Retry(deadline=90, predicate=Exception, maximum=2))
         desired_slots_amount = res.slot_capacity + amount
 
         if desired_slots_amount <= 0:  # can not set to negative
@@ -205,11 +236,11 @@ class Client:
 
         res.slot_capacity = desired_slots_amount
         update_mask = field_mask_pb2.FieldMask(paths=["slot_capacity"])
-        final_res = self.reservation_api.update_reservation(reservation=res,
-                                                            update_mask=update_mask,
-                                                            retry=retry.Retry(deadline=90,
-                                                                              predicate=Exception,
-                                                                              maximum=2))
+        final_res = self.reservation_api.update_reservation(
+            reservation=res,
+            update_mask=update_mask,
+            retry=self.standard_retry,
+        )
 
         assert final_res.slot_capacity == desired_slots_amount, "slots not allocated"
 
@@ -228,15 +259,20 @@ class Client:
 
         :return:
         """
-        list_reservations = [i.name for i in self.reservation_api.list_reservations(parent=self.admin_project_region_path)]
+        list_reservations = [
+            i.name
+            for i in self.reservation_api.list_reservations(
+                parent=self.admin_project_region_path, retry=self.standard_retry
+            )
+        ]
         assignments = []
         for i in list(map(lambda x: x.split("/")[-1], list_reservations)):
             assignments.extend(
                 [
                     i.name
                     for i in self.reservation_api.list_assignments(
-                    parent=self.admin_project_region_path + "/reservations/" + i
-                )
+                        parent=self.admin_project_region_path + "/reservations/" + i
+                    )
                 ]
             )
         return assignments
@@ -248,9 +284,10 @@ class Client:
         """
         # ``projects/myproject/locations/US/reservations/team1-prod/assignments/123``
         assignment = self._get_assignment_for_reservation()
-        self.reservation_api.delete_assignment(name=assignment, retry=retry.Retry(deadline=90,
-                                                                                  predicate=Exception,
-                                                                                  maximum=2))
+        self.reservation_api.delete_assignment(
+            name=assignment,
+            retry=self.standard_retry,
+        )
 
     def _get_assignment_for_reservation(self):
         """
@@ -258,7 +295,9 @@ class Client:
         :return:
         """
         # there should only be one assignment per reservation
-        list_assignments = self.reservation_api.list_assignments(parent=self.reservation_path)
+        list_assignments = self.reservation_api.list_assignments(
+            parent=self.reservation_path, retry=self.standard_retry
+        )
 
         # we get a list of assigment ids like
         # ``projects/myproject/locations/US/reservations/team1-prod/assignments/123``
@@ -272,5 +311,6 @@ class Client:
         :return:
         """
         self.reservation_api.delete_capacity_commitment(
-            name=commit_id, retry=retry.Retry(deadline=90, predicate=Exception, maximum=2)
+            name=commit_id,
+            retry=self.standard_retry
         )
