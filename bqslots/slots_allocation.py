@@ -87,9 +87,16 @@ class Client:
         :param slots:
         :return:
         """
+        # do stuff
+        if self.using_lock:
+            self.lock_client.wait_for_lock_expo()
+
         self._increment_slots_number_on_reservation(slots)
         if not self._reservation_assigned_to_project():
             self._create_assignment()
+
+        if self.using_lock:
+            self.lock_client.free_lock()
 
     def clear_slots_commitment(self, commitment_id: str):
         """
@@ -103,7 +110,7 @@ class Client:
 
         # do stuff
         if self.using_lock:
-            self.lock_client.lock()
+            self.lock_client.wait_for_lock_expo()
 
         commit = self.reservation_api.get_capacity_commitment(
             name=commitment_id,
