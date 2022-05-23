@@ -69,7 +69,7 @@ class Client:
 
         self.using_lock = False
         if gcs_lock_bucket:
-            self.lock_client = lock.Client(bucket=gcs_lock_bucket, lock_file_path="slots-lock.txt", ttl=2)
+            self.lock_client = lock.Client(bucket=gcs_lock_bucket, lock_file_path="slots-lock.txt", ttl=30)
             self.using_lock = True
 
     def allocate_slots(self, slots: int) -> str:
