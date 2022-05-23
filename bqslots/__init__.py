@@ -2,4 +2,4 @@
 
 __author__ = """connor"""
 __email__ = 'connor.mcshane@paymentsense.com'
-__version__ = '0.0.6'
+__version__ = '0.1.0'
