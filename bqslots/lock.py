@@ -13,7 +13,6 @@ from google.api_core.exceptions import PreconditionFailed, NotFound
 
 class Client:
 
-
     def __init__(self, bucket, lock_file_path: str = "gcs_lock_thing.txt", ttl=30, lock_id_prefix='default'):
         self.bucket = bucket
         self.lock_file_path = lock_file_path
@@ -24,7 +23,6 @@ class Client:
         self.blob = self.bucket.blob(lock_file_path)
         self.lock_id_prefix = lock_id_prefix
         self.lock_id = f"{lock_id_prefix}-{uuid.uuid4()}"
-
 
     def lock(self) -> bool:
         """
@@ -75,6 +73,7 @@ class Client:
         Returns:
 
         """
+
         @backoff.on_predicate(*backoff_args, **backoff_kwargs)
         def backoff_lock():
             print(f"Backing off lock release: {self.lock_file_path}")
