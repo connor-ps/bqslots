@@ -38,6 +38,7 @@ class Client:
             return True
         except PreconditionFailed:  # this means lock already exists
             print(f"lock as its already in use, checking expiration: {self.lock_file_path}")
+
             # check if lock is expired
             blob_metadata = self.bucket.get_blob(self.lock_file_path).metadata
             expiration_timestamp = datetime.fromisoformat(blob_metadata.get('expiration_timestamp'))
