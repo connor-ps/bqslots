@@ -15,10 +15,10 @@ jobs:
             fail-fast: false
             matrix:
                 config:
-                    - { os: windows-latest, py: "3.9" }
-                    - { os: macOS-latest, py: "3.9" }
-                    - { os: ubuntu-latest, py: "3.7" }
-                    - { os: ubuntu-latest, py: "3.8" }
+#                    - { os: windows-latest, py: "3.9" }
+#                    - { os: macOS-latest, py: "3.9" }
+#                    - { os: ubuntu-latest, py: "3.7" }
+#                    - { os: ubuntu-latest, py: "3.8" }
                     - { os: ubuntu-latest, py: "3.9" }
 
         env:
@@ -36,6 +36,12 @@ jobs:
                   pip install --user --no-cache-dir Cython
                   pip install --user -r requirements.txt
                   pip install --user -r requirements_dev.txt
+            - uses: 'actions/checkout@v3'
+            - id: 'auth'
+              name: 'Authenticate to Google Cloud'
+              uses: 'google-github-actions/auth@v0'
+              with:
+                  credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
             - name: PKG-TEST
               run: |
                   python -m unittest discover tests/

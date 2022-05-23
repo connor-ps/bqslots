@@ -5,29 +5,7 @@ from google.api_core import retry
 from google.cloud import bigquery_reservation_v1
 from google.protobuf import field_mask_pb2
 import bqslots.lock as lock
-
-
-def box_print(msg, indent=1, width=None, title=None):
-    """
-    Need I say more?
-    :param msg:
-    :param indent:
-    :param width:
-    :param title:
-    :return:
-    """
-    lines = msg.split("\n")
-    space = " " * indent
-    if not width:
-        width = max(map(len, lines))
-    box = f'╔{"═" * (width + indent * 2)}╗\n'  # upper_border
-    if title:
-        box += f"║{space}{title:<{width}}{space}║\n"  # title
-        box += f'║{space}{"-" * len(title):<{width}}{space}║\n'  # underscore
-    box += "".join([f"║{space}{line:<{width}}{space}║\n" for line in lines])
-    box += f'╚{"═" * (width + indent * 2)}╝'  # lower_border
-    print(box)
-
+from bqslots.box_print import box_print
 
 class Client:
     """
@@ -69,7 +47,7 @@ class Client:
 
         self.using_lock = False
         if gcs_lock_bucket:
-            self.lock_client = lock.Client(bucket=gcs_lock_bucket, lock_file_path="slots-lock.txt", ttl=30)
+            self.lock_client = lock.Client(bucket=gcs_lock_bucket, lock_file_path="slots-lock.txt", expiry=30)
             self.using_lock = True
 
     def allocate_slots(self, slots: int) -> str:

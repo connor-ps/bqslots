@@ -13,16 +13,16 @@ from google.api_core.exceptions import PreconditionFailed, NotFound
 
 class Client:
 
-    def __init__(self, bucket, lock_file_path: str = "gcs_lock_thing.txt", ttl=30, lock_id_prefix='default'):
+    def __init__(self, bucket, lock_file_path: str = "lock.txt", expiry=30, lock_id_prefix='default'):
         self.bucket = bucket
         self.lock_file_path = lock_file_path
-        self.ttl = ttl
+        self.expiry = expiry
         self.storage_client = storage.Client()
         self.bucket = self.storage_client.get_bucket(bucket)
         self.lock_file_path = lock_file_path
         self.blob = self.bucket.blob(lock_file_path)
         self.lock_id_prefix = lock_id_prefix
-        self.lock_id = f"{lock_id_prefix}-{uuid.uuid4()}"
+        self.lock_client_id = f"{lock_id_prefix}-{str(uuid.uuid4())[:8]}"
 
     def lock(self) -> bool:
         """
@@ -37,18 +37,20 @@ class Client:
             print("Lock acquired: {}".format(self.lock_file_path))
             return True
         except PreconditionFailed:  # this means lock already exists
-            print(f"lock as its already in use, checking expiration: {self.lock_file_path}")
+            print(f"Lock as its already in use, checking expiration: {self.lock_file_path}")
 
             # check if lock is expired
             blob_metadata = self.bucket.get_blob(self.lock_file_path).metadata
             expiration_timestamp = datetime.fromisoformat(blob_metadata.get('expiration_timestamp'))
+            lock_client_id = blob_metadata.get('lock_id')
 
             if expiration_timestamp < datetime.utcnow():  # lock is stale so we bin it
+                print(f"Lock is stale so removing lock:{lock_client_id}")
                 self.free_lock()
                 self.lock()
                 return True
 
-            print("lock is not stale so we wait....")
+            print(f"Waiting for lock: {lock_client_id} to be freed or expire")
             return False
 
     def free_lock(self) -> bool:
@@ -105,8 +107,8 @@ class Client:
         file = 'lock.txt'
         open(file, 'a').close()
         self.blob.upload_from_filename(file, if_generation_match=0)
-        metadata = {'expiration_timestamp': datetime.utcnow() + timedelta(seconds=self.ttl),
-                    'lock_id': self.lock_id
+        metadata = {'expiration_timestamp': datetime.utcnow() + timedelta(seconds=self.expiry),
+                    'lock_id': self.lock_client_id
                     }
         self.blob.metadata = metadata
         self.blob.patch()
