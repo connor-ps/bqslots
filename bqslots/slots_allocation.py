@@ -7,6 +7,7 @@ from google.protobuf import field_mask_pb2
 import bqslots.lock as lock
 from bqslots.box_print import box_print
 
+
 class Client:
     """
     wrapper for reservation client, each client is for one project and reservation
@@ -21,13 +22,14 @@ class Client:
     standard_retry = retry.Retry(deadline=120, predicate=Exception)
 
     def __init__(
-            self,
-            admin_project: str,
-            admin_region: str,
-            reservation: str,
-            max_slots_quota: int,
-            user_project: str,
-            gcs_lock_bucket=None
+        self,
+        admin_project: str,
+        admin_region: str,
+        reservation: str,
+        max_slots_quota: int,
+        user_project: str,
+        gcs_lock_bucket=None,
+        lock_client_prefix="bqs-slots",
     ):
         self.admin_project = admin_project
         self.admin_region = admin_region
@@ -47,7 +49,12 @@ class Client:
 
         self.using_lock = False
         if gcs_lock_bucket:
-            self.lock_client = lock.Client(bucket=gcs_lock_bucket, lock_file_path="slots-lock.txt", expiry=30)
+            self.lock_client = lock.Client(
+                bucket=gcs_lock_bucket,
+                lock_file_path="slots-lock.txt",
+                expiry=30,
+                lock_id_prefix=lock_client_prefix,
+            )
             self.using_lock = True
 
     def allocate_slots(self, slots: int) -> str:
@@ -153,17 +160,20 @@ class Client:
         """
 
         if (
-                slots + self._get_total_number_of_slots_allocated_admin_project()
-                > self.max_slots_quota
+            slots + self._get_total_number_of_slots_allocated_admin_project()
+            > self.max_slots_quota
         ):
             return self.MAX_SLOTS_MESSAGE
 
         commit_config = bigquery_reservation_v1.CapacityCommitment(
-            plan="FLEX", slot_count=slots,
+            plan="FLEX",
+            slot_count=slots,
         )
 
         commit = self.reservation_api.create_capacity_commitment(
-            parent=self.admin_project_region_path, capacity_commitment=commit_config, retry=self.standard_retry
+            parent=self.admin_project_region_path,
+            capacity_commitment=commit_config,
+            retry=self.standard_retry,
         )
         self.last_slot_commit = commit.name
         box_print(f"purchased commit:{commit.name}")
@@ -223,7 +233,9 @@ class Client:
         :return:
         """
 
-        res = self.reservation_api.get_reservation(name=self.reservation_path, retry=self.standard_retry)
+        res = self.reservation_api.get_reservation(
+            name=self.reservation_path, retry=self.standard_retry
+        )
         desired_slots_amount = res.slot_capacity + amount
 
         if desired_slots_amount <= 0:  # can not set to negative
@@ -266,8 +278,8 @@ class Client:
                 [
                     i.name
                     for i in self.reservation_api.list_assignments(
-                    parent=self.admin_project_region_path + "/reservations/" + i
-                )
+                        parent=self.admin_project_region_path + "/reservations/" + i
+                    )
                 ]
             )
         return assignments
@@ -306,6 +318,5 @@ class Client:
         :return:
         """
         self.reservation_api.delete_capacity_commitment(
-            name=commit_id,
-            retry=self.standard_retry
+            name=commit_id, retry=self.standard_retry
         )
