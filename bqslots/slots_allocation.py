@@ -120,12 +120,12 @@ class Client:
         self._decrement_slots_number_on_reservation(commit_slots)
 
         reservation_amount = self._get_number_of_slots_allocated_reservation()
-        total_slots_used = self._get_total_number_of_slots_allocated_admin_project()
 
         if reservation_amount == 0:
             self._clear_assignments_for_reservation()
 
         self._clear_slots(commitment_id)
+        total_slots_used = self._get_total_number_of_slots_allocated_admin_project()
 
         if self.using_lock:
             self.lock_client.free_lock()
@@ -245,7 +245,7 @@ class Client:
         :return:
         """
 
-        res = self.reservation_api.get_reservation(name=self.reservation_path, retry=retry.Retry(deadline=90, predicate=Exception, maximum=2))
+        res = self.reservation_api.get_reservation(name=self.reservation_path, retry=self.standard_retry)
         desired_slots_amount = res.slot_capacity + amount
 
         if desired_slots_amount <= 0:  # can not set to negative
